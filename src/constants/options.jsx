@@ -51,5 +51,14 @@ export const SelectBudgetOptions=[
     
 ]
 
-export const AI_PROMPT='Generate Travel Plan for Location : {Location}'
-  
+//export const AI_PROMPT='Generate Travel Plan for Location : {Location}'
+export const AI_PROMPT = `
+Generate a travel plan with the following details:
+
+Location: {location}
+Duration: {totalDays} days
+Traveler Type: {traveler}
+Budget: {budget}
+
+Include a daily itinerary with recommended places, activities, accommodations, food suggestions, estimated costs, and travel tips. Make sure it's engaging and tailored to the traveler's type and budget.
+`;
