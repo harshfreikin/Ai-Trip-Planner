@@ -17,14 +17,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { LogIn } from "lucide-react";
 import { useGoogleLogin } from "@react-oauth/google";
 import axios from "axios";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "@/services/firebaseConfig";
+import { AiOutlineLoading3Quarters } from "react-icons/ai";
+import { useNavigate } from "react-router-dom";
 
 function CreateTrip() {
   const [place, setplace] = useState();
   const [formData, setFormData] = useState({});
   const [openDailog, setOpenDailog] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const navigate=useNavigate();
 
   const handleInputChange = (name, value) => {
     setFormData({
@@ -38,7 +43,7 @@ function CreateTrip() {
   }, [formData]);
 
   const login = useGoogleLogin({
-    onSuccess: (codeResp) =>{
+    onSuccess: (codeResp) => {
       console.log("Login success:", codeResp);
       //localStorage.setItem("user", JSON.stringify(codeResp));
       //setOpenDailog(false);
@@ -63,6 +68,7 @@ function CreateTrip() {
       toast("Please fill in all fields before generating the trip.");
       return;
     }
+    setLoading(true);
 
     const FINAL_PROMT = AI_PROMPT.replace(
       "{location}",
@@ -71,37 +77,78 @@ function CreateTrip() {
       .replace("{totalDays}", formData?.noOfDays)
       .replace("{traveler}", formData?.Traveler)
       .replace("{budget}", formData?.Budget);
+    const result = await chatSession.sendMessage(FINAL_PROMT);
+    console.log("--", result?.response?.text());
+    setLoading(false);
+    SaveAiTrip(result?.response?.text());
 
-    console.log("Final Prompt:", FINAL_PROMT);
-
-    try {
-      const result = await chatSession.sendMessage(FINAL_PROMT);
-      const text = await result?.response?.text();
-      console.log("AI Response:", text);
-    } catch (err) {
-      console.error("Error generating trip:", err);
-      toast("Something went wrong while generating the trip!");
-    }
+    // try {
+    //   const result = await chatSession.sendMessage(FINAL_PROMT);
+    //   const text = await result?.response?.text();
+    //   console.log("AI Response:", text);
+    // } catch (err) {
+    //   console.error("Error generating trip:", err);
+    //   toast("Something went wrong while generating the trip!");
+    // }
   };
 
   const GetUserProfile = (tokenInfo) => {
     axios
-      .get(`https://www.googleapis.com/oauth2/v1/userinfo?access_token=${tokenInfo?.access_token}`, {
-        headers: {
-          Authorization: `Bearer ${tokenInfo?.access_token}`,
-          Accept: "application/json",
-        },
-      })
+      .get(
+        `https://www.googleapis.com/oauth2/v1/userinfo?access_token=${tokenInfo?.access_token}`,
+        {
+          headers: {
+            Authorization: `Bearer ${tokenInfo?.access_token}`,
+            Accept: "application/json",
+          },
+        }
+      )
       .then((resp) => {
         console.log(resp);
-        localStorage.setItem('user',JSON.stringify(resp.data));
+        localStorage.setItem("user", JSON.stringify(resp.data));
         setOpenDailog(false);
         onGenerateTrip();
-
       })
       .catch((err) => {
         console.error("Failed to fetch user profile:", err);
       });
+  };
+
+  const SaveAiTrip = async (TripData) => {
+    try {
+      setLoading(true);
+      const userStr = localStorage.getItem("user");
+      
+      if (!userStr) {
+        toast.error("User data not found. Please sign in again.");
+        setOpenDailog(true);
+        return;
+      }
+      
+      const user = JSON.parse(userStr);
+      
+      if (!user || !user.email) {
+        toast.error("User email not found. Please sign in again.");
+        setOpenDailog(true);
+        return;
+      }
+      
+      const docId = Date.now().toString();
+
+      await setDoc(doc(db, "Ai-Trip", docId), {
+        userSelection: formData,
+        TripData: JSON.parse(TripData),
+        userEmail: user.email,
+        id: docId,
+      });
+      
+      setLoading(false);
+      navigate('/view-trip/'+docId);
+    } catch (error) {
+      console.error("Error saving trip:", error);
+      toast.error("Failed to save trip. Please try again.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -191,33 +238,41 @@ function CreateTrip() {
       </div>
 
       <div className="my-10 justify-end flex">
-        <Button onClick={onGenerateTrip}>Generate Trip</Button>
+        <Button disabled={loading} onClick={onGenerateTrip}>
+          {loading ? (
+            <AiOutlineLoading3Quarters className="h-7 w-7 animate-spin" />
+          ) : (
+            "Generate Trip"
+          )}
+        </Button>
       </div>
       <br></br>
 
       <Dialog open={openDailog} onOpenChange={setOpenDailog}>
-  <DialogContent className="[&>button]:ring-0 [&>button]:ring-offset-0">
-    <DialogHeader>
-      <DialogTitle className="sr-only">Google Sign In</DialogTitle> {/* Hidden but required */}
-      <DialogDescription asChild>
-        <div>
-          <img src="/logo.svg" alt="logo" />
-          <h2 className="font-bold text-lg mt-7">Sign In With Google</h2>
-          <span>Sign in to the App with Google authentication securely</span>
+        <DialogContent className="[&>button]:ring-0 [&>button]:ring-offset-0">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Google Sign In</DialogTitle>{" "}
+            {/* Hidden but required */}
+            <DialogDescription asChild>
+              <div>
+                <img src="/logo.svg" alt="logo" />
+                <h2 className="font-bold text-lg mt-7">Sign In With Google</h2>
+                <span>
+                  Sign in to the App with Google authentication securely
+                </span>
 
-          <Button
-            onClick={() => login()}
-            className="w-full mt-5 flex gap-4 items-center"
-          >
-            <FcGoogle className="h-7 w-7" />
-            Sign In With Google
-          </Button>
-        </div>
-      </DialogDescription>
-    </DialogHeader>
-  </DialogContent>
-</Dialog>
-
+                <Button
+                  onClick={() => login()}
+                  className="w-full mt-5 flex gap-4 items-center"
+                >
+                  <FcGoogle className="h-7 w-7" />
+                  Sign In With Google
+                </Button>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
