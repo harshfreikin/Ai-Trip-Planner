@@ -17,15 +17,20 @@ function PlacesToVisit({ trip }) {
 
       for (const day of sortedDays) {
         for (const item of itinerary[day]) {
-          const data = { textQuery: item.placeName };
+          const locationLabel = trip?.userSelection?.location?.label || '';
+          const data = { textQuery: `${item.placeName}, ${locationLabel}` };
           const response = await GetPlaceDetails(data);
           const photos = response?.data?.places?.[0]?.photos;
 
+          // Debug log: show the full API response for each place
+          console.log('API response for', item.placeName, ':', response?.data);
+
           if (photos && photos.length > 0) {
+            console.log('All photo names for', item.placeName, ':', photos.map(p => p.name));
             const photoName = photos[0].name;
             newPhotoUrls[item.placeName] = getPhotoUrl(photoName);
           } else {
-            newPhotoUrls[item.placeName] = "/default_placeholder.jpg";
+            newPhotoUrls[item.placeName] = "/No Image.jpg";
           }
         }
       }
@@ -34,7 +39,7 @@ function PlacesToVisit({ trip }) {
     };
 
     fetchPlacePhotos();
-  }, [itinerary, sortedDays]);
+  }, [itinerary, sortedDays, trip]);
 
   return (
     <div className='p-6'>
@@ -59,10 +64,12 @@ function PlacesToVisit({ trip }) {
                   <li className='flex flex-col gap-2 p-4 border rounded-lg hover:shadow-lg transition duration-200 cursor-pointer h-[420px] overflow-hidden'>
                     {/* Image */}
                     <div className='w-full h-40 bg-gray-200 rounded-md overflow-hidden'>
+                      {console.log('Image URL for', item.placeName, ':', photoUrls[item.placeName])}
                       <img
                         src={photoUrls[item.placeName] || "/No Image.jpg"}
                         alt={item.placeName}
                         className='w-full h-full object-cover'
+                        onError={(e) => { e.target.onerror = null; e.target.src = "/No Image.jpg"; }}
                       />
                     </div>
 
